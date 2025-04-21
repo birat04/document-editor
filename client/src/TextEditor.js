@@ -23,6 +23,7 @@ export default function TextEditor() {
   const [socket, setSocket] = useState()
   const [quill, setQuill] = useState()
   const [title, setTitle] = useState("Untitled Document")
+  const [error, setError] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -33,11 +34,31 @@ export default function TextEditor() {
   }, [documentId, navigate])
 
   useEffect(() => {
-    const s = io("http://localhost:3001")
-    setSocket(s)
+    try {
+      const s = io("http://localhost:3001", {
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+      })
 
-    return () => {
-      s.disconnect()
+      s.on("connect_error", (err) => {
+        setError("Failed to connect to server. Please try again later.")
+        console.error("Socket connection error:", err)
+      })
+
+      s.on("connect", () => {
+        setError(null)
+        console.log("Connected to server")
+      })
+
+      setSocket(s)
+
+      return () => {
+        s.disconnect()
+      }
+    } catch (err) {
+      setError("Failed to initialize connection")
+      console.error("Socket initialization error:", err)
     }
   }, [])
 
@@ -112,6 +133,7 @@ export default function TextEditor() {
 
   return (
     <div className="container">
+      {error && <div className="error-message">{error}</div>}
       <input
         type="text"
         value={title}

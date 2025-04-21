@@ -7,11 +7,17 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-mongoose.connect("mongodb://localhost/google-docs-clone", {
+// MongoDB connection
+mongoose.connect("mongodb://127.0.0.1:27017/google-docs-clone", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
   useFindAndModify: false,
   useCreateIndex: true,
+})
+.then(() => console.log("Connected to MongoDB"))
+.catch(err => {
+  console.error("MongoDB connection error:", err)
+  process.exit(1)
 })
 
 const server = require("http").createServer(app)
