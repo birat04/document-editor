@@ -1,5 +1,11 @@
+const express = require("express")
 const mongoose = require("mongoose")
 const Document = require("./Document")
+const cors = require("cors")
+
+const app = express()
+app.use(cors())
+app.use(express.json())
 
 mongoose.connect("mongodb://localhost/google-docs-clone", {
   useNewUrlParser: true,
@@ -8,7 +14,8 @@ mongoose.connect("mongodb://localhost/google-docs-clone", {
   useCreateIndex: true,
 })
 
-const io = require("socket.io")(3001, {
+const server = require("http").createServer(app)
+const io = require("socket.io")(server, {
   cors: {
     origin: "http://localhost:3000",
     methods: ["GET", "POST"],
@@ -17,18 +24,42 @@ const io = require("socket.io")(3001, {
 
 const defaultValue = ""
 
+// API Routes
+app.get("/documents", async (req, res) => {
+  try {
+    const documents = await Document.find().sort({ updatedAt: -1 })
+    res.json(documents)
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch documents" })
+  }
+})
+
+app.delete("/documents/:id", async (req, res) => {
+  try {
+    await Document.findByIdAndDelete(req.params.id)
+    res.json({ message: "Document deleted successfully" })
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete document" })
+  }
+})
+
+// Socket.io connection handling
 io.on("connection", socket => {
   socket.on("get-document", async documentId => {
     const document = await findOrCreateDocument(documentId)
     socket.join(documentId)
-    socket.emit("load-document", document.data)
+    socket.emit("load-document", document)
 
     socket.on("send-changes", delta => {
       socket.broadcast.to(documentId).emit("receive-changes", delta)
     })
 
     socket.on("save-document", async data => {
-      await Document.findByIdAndUpdate(documentId, { data })
+      await Document.findByIdAndUpdate(documentId, {
+        data: data.data,
+        title: data.title,
+        updatedAt: Date.now()
+      })
     })
   })
 })
@@ -38,5 +69,16 @@ async function findOrCreateDocument(id) {
 
   const document = await Document.findById(id)
   if (document) return document
-  return await Document.create({ _id: id, data: defaultValue })
+  return await Document.create({ 
+    _id: id, 
+    data: defaultValue,
+    title: "Untitled Document",
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  })
 }
+
+const PORT = process.env.PORT || 3001
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`)
+})
